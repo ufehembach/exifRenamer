@@ -26,16 +26,16 @@ checkDateValid() {
 
 	local input="$1"
 	if date -d "$input" >/dev/null 2>&1; then
-  		echo "Die Zeichenkette ist ein gültiges Datum und eine gültige Zeit."
-		exit 1
+  	#	echo "Die Zeichenkette ist ein gültiges Datum und eine gültige Zeit."
+		return 0
 	else
-  		echo "Die Zeichenkette ist kein gültiges Datum und keine gültige Zeit."
-		exit 0 
+  	#	echo "Die Zeichenkette ist kein gültiges Datum und keine gültige Zeit."
+		return 1
 	fi
 }
 
 
-SRC=.
+SRC=..
 DEST=/data/photo-renamed
 
 #which rdfind && echo da || apt install rdfind
@@ -116,18 +116,38 @@ do
 			fi
 		fi
 	fi
+	# just in case
+	filenametime=`echo $filenametime | tr - : `
 	# extrahiere das create datum mit exiftool
 	exifCreateD=`exiftool -CreateDate "$FILE" | cut -f2- -d: | sed 's/^ *//' | sed 's/\([0-9]\{4\}\):\([0-9]\{2\}\):\([0-9]\{2\}\)/\1-\2-\3/' ` 
-	exifDatTimOrg=`exiftool -DateTimeOriginal "$FILE" | cut -f2- -d: | sed 's/^ *//'`
-	exifModDat=`exiftool -ModifyDate "$FILE" | cut -f2- -d: | sed 's/^ *//'`
-	echo $exifCreateD
+	exifDatTimOrg=`exiftool -DateTimeOriginal "$FILE" | cut -f2- -d: | sed 's/^ *//' | sed 's/\([0-9]\{4\}\):\([0-9]\{2\}\):\([0-9]\{2\}\)/\1-\2-\3/' `
+	exifModDat=`exiftool -ModifyDate "$FILE" | cut -f2- -d: | sed 's/^ *//' | sed  's/\([0-9]\{4\}\):\([0-9]\{2\}\):\([0-9]\{2\}\)/\1-\2-\3/' `
+
+	checkDateValid "$filenamedate $filenametime" && echo "Datum ok" || echo "Datum Bad"
 	checkDateValid "$exifCreateD"   && echo "Datum ok" || echo "Datum Bad"
+	checkDateValid "$exifDatTimOrg"   && echo "Datum ok" || echo "Datum Bad"
+	checkDateValid "$exifModDat"   && echo "Datum ok" || echo "Datum Bad"
  
 	echo "filenamedate/time: $filenamedate $filenametime"
 	echo "exifCreatD         $exifCreateD"
 	echo "exifDatTimOrg      $exifDatTimOrg" 
 	echo "exifModDat         $exifModDat"
 
+OldestDate=`cat << EOF | sort | head -1 
+$exifCreateD
+$exifDatTimOrg 
+$exifModDat
+$filenamedate $filenametime
+EOF`
+	
+2ndOldestDate=`cat << EOF | sort | head -1 
+$exifCreateD
+$exifDatTimOrg 
+$exifModDat
+$filenamedate $filenametime
+EOF`
+
+	if 	
 	dimensions=$(exiftool -ImageWidth -ImageHeight -n -S "$FILE")
 	width=$(echo "$dimensions" | awk -F ': ' '/ImageWidth/{print $2}')
 	height=$(echo "$dimensions" | awk -F ': ' '/ImageHeight/{print $2}')
@@ -136,8 +156,9 @@ do
 
 	gps_data=$(exiftool -GPSLatitude -GPSLongitude -GPSAltitude -n -d "%+6f" "$FILE")
 	if [ -n "$gps_data" ]; then
-  		echo "Das Bild enthält GPS-Daten."
-		echo $gps_data
+  		#echo "Das Bild enthält GPS-Daten."
+		#echo $gps_data
+		hasGeo="GEO"
 		GPSLat=`exiftool -GPSLatitude -n -d "%+6f" "$FILE" | grep "GPS Latitude" | cut -d: -f2- | sed 's/^ *//'`
 		GPSLon=`exiftool -GPSLongitude -n -d "%+6f" "$FILE" | grep "GPS Longitude" | cut -d: -f2- | sed 's/^ *//'`
 		GPSAlt=`exiftool -GPSAltitude -n -d "%+6f" "$FILE"  | grep "GPS Altitude" | cut -d: -f2- | sed 's/^ *//'`
@@ -145,13 +166,15 @@ do
 		echo $GPSLon
 		echo $GPSAlt
 	else
-  		echo "Das Bild enthält keine GPS-Daten."
+  		#echo "Das Bild enthält keine GPS-Daten."
+		hasGeo="NoGeo"
   		# Weitere Aktionen für Bilder ohne GPS-Daten hier
 	fi
 	exiftool -XMP:all "$FILE"
 
 	echo curl "https://nominatim.openstreetmap.org/reverse?format=json&lat=$GPSLat&lon=$GPSLon"
 	curl "https://nominatim.openstreetmap.org/reverse?format=json&lat=$GPSLat&lon=$GPSLon"
+	echo " "
 
 	echo "-ufe-Old-Name=$filename" > tags.txt
 	echo "-ufe-Old-Dir=$dirname" >>tags.txt
@@ -160,5 +183,8 @@ do
         echo "-ufe-Old-exifDatTimOrg=$exifDatTimOrgD" >>tags.txt
         echo "-ufe-Old-exifModDat=$exifModDat" >>tags.txt
 
-	myNewFileName=
+	OldestDateFile=`echo $OldestDate| tr ":" "-"`
+	myNewFileName="$OldestDateFile -$hasGeo-"$exifSize"MPi.$extension" 
+        echo -n myNewFileName
+        echo $myNewFileName
 done <$ScriptName.FileList.lst
