@@ -59,7 +59,7 @@ cd "$SRC"
 #if test `find $myFileList -mmin +5000`
 if [ ! -f $myFileList ] || [ $(find $myFileList -mmin +5000) ]; then
 	rm $myFileList.progress
-	if [ 1 -eq 1 ]; then
+	if [ 1 -eq 0 ]; then
 		echo find images with type
 		find . -name '*' -not -path '*/@eaDir/*' -exec file {} \; | grep -o -P '^.+: \w+ image' | pv -l | cut -f1 -d: >$myFileList.progress
 		echo find videos with type
@@ -140,14 +140,22 @@ $exifModDat
 $filenamedate $filenametime
 EOF`
 	
-2ndOldestDate=`cat << EOF | sort | head -1 
+Oldest2ndDate=`cat << EOF | sort | head -1 
 $exifCreateD
 $exifDatTimOrg 
 $exifModDat
 $filenamedate $filenametime
 EOF`
 
-	if 	
+	echo  ${#OldestDate} ${#Oldest2ndDate} 
+	if [ ${#OldestDate} -le ${#Oldest2ndDate} ]; then
+	    # echo "Die Variablen haben die gleiche Länge."
+            echo .
+	else
+	    #echo "Die Variablen haben unterschiedliche Längen."
+	    OldestDate=$Oldest2ndDate
+	fi
+
 	dimensions=$(exiftool -ImageWidth -ImageHeight -n -S "$FILE")
 	width=$(echo "$dimensions" | awk -F ': ' '/ImageWidth/{print $2}')
 	height=$(echo "$dimensions" | awk -F ': ' '/ImageHeight/{print $2}')
@@ -186,5 +194,7 @@ EOF`
 	OldestDateFile=`echo $OldestDate| tr ":" "-"`
 	myNewFileName="$OldestDateFile -$hasGeo-"$exifSize"MPi.$extension" 
         echo -n myNewFileName
-        echo $myNewFileName
+	thisDestDIR=$DEST/`echo myNewFilename  | cut -f1 -d" " | tr "-" "/"`
+	mkdir -p $thisDestDIR
+        echo cp  $myNewFileName $thisDestDIR
 done <$ScriptName.FileList.lst
