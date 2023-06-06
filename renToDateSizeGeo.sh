@@ -25,7 +25,7 @@ getDateTimeFromFilename() {
 checkDateValid() {
 
 	local input="$1"
-	if date -d "$input" >/dev/null 2>&1; then
+	if [[ -n "$input" ]] && date -d "$input" >/dev/null 2>&1; then
   	#	echo "Die Zeichenkette ist ein gültiges Datum und eine gültige Zeit."
 		return 0
 	else
@@ -69,6 +69,7 @@ if [ ! -f $myFileList ] || [ $(find $myFileList -mmin +5000) ]; then
 		FILETYPES=("*.jpg" "*.jpeg" "*.png" "*.tif" "*.tiff" "*.gif" "*.xcf" "*.mp4" "*.avi" "*.mov" "*.wmv" "*.flv" "*.mkv" "*.webm" "*.m4v")
 		for x in "${FILETYPES[@]}"; do
 			echo -n "$x"
+			pwd
 			find . -iname "$x" -print | grep -v @eaDir | pv -l >>$myFileList.progress
 			#echo " " `wc -l filelist.lst | cut -d " " -f 1`
 		done
@@ -128,10 +129,10 @@ do
 	checkDateValid "$exifDatTimOrg"   && echo "Datum ok" || echo "Datum Bad"
 	checkDateValid "$exifModDat"   && echo "Datum ok" || echo "Datum Bad"
  
-	echo "filenamedate/time: $filenamedate $filenametime"
-	echo "exifCreatD         $exifCreateD"
-	echo "exifDatTimOrg      $exifDatTimOrg" 
-	echo "exifModDat         $exifModDat"
+#	echo "filenamedate/time: $filenamedate $filenametime"
+#	echo "exifCreatD         $exifCreateD"
+#	echo "exifDatTimOrg      $exifDatTimOrg" 
+#	echo "exifModDat         $exifModDat"
 
 OldestDate=`cat << EOF | sort | head -1 
 $exifCreateD
@@ -147,7 +148,7 @@ $exifModDat
 $filenamedate $filenametime
 EOF`
 
-	echo  ${#OldestDate} ${#Oldest2ndDate} 
+#	echo  ${#OldestDate} ${#Oldest2ndDate} 
 	if [ ${#OldestDate} -le ${#Oldest2ndDate} ]; then
 	    # echo "Die Variablen haben die gleiche Länge."
             echo .
@@ -179,22 +180,39 @@ EOF`
   		# Weitere Aktionen für Bilder ohne GPS-Daten hier
 	fi
 	exiftool -XMP:all "$FILE"
-
-	echo curl "https://nominatim.openstreetmap.org/reverse?format=json&lat=$GPSLat&lon=$GPSLon"
-	curl "https://nominatim.openstreetmap.org/reverse?format=json&lat=$GPSLat&lon=$GPSLon"
+	if [  $hasGeo =  "GEO" ]
+	then
+		#echo curl "https://nominatim.openstreetmap.org/reverse?format=json&lat=$GPSLat&lon=$GPSLon"
+		curl "https://nominatim.openstreetmap.org/reverse?format=json&lat=$GPSLat&lon=$GPSLon"
+	fi
 	echo " "
 
-	echo "-ufe-Old-Name=$filename" > tags.txt
-	echo "-ufe-Old-Dir=$dirname" >>tags.txt
-	echo "-ufe-Old-FileDat=$filenamedate $filenametime" >>tags.txt
-        echo "-ufe-Old-exifCreatDat=$exifCreateD" >>tags.txt
-        echo "-ufe-Old-exifDatTimOrg=$exifDatTimOrgD" >>tags.txt
-        echo "-ufe-Old-exifModDat=$exifModDat" >>tags.txt
+	if [ ! -n "$OldestDate"  ]
+		then
+		echo do-it
+		echo "-ufe-Old-Name=$filename" > tags.txt
+		echo "-ufe-Old-Dir=$dirname" >>tags.txt
+		echo "-ufe-Old-FileDat=$filenamedate $filenametime" >>tags.txt
+		echo "-ufe-Old-exifCreatDat=$exifCreateD" >>tags.txt
+		echo "-ufe-Old-exifDatTimOrg=$exifDatTimOrgD" >>tags.txt
+		echo "-ufe-Old-exifModDat=$exifModDat" >>tags.txt
 
-	OldestDateFile=`echo $OldestDate| tr ":" "-"`
-	myNewFileName="$OldestDateFile -$hasGeo-"$exifSize"MPi.$extension" 
-        echo -n myNewFileName
-	thisDestDIR=$DEST/`echo myNewFilename  | cut -f1 -d" " | tr "-" "/"`
-	mkdir -p $thisDestDIR
-        echo cp  $myNewFileName $thisDestDIR
+		OldestDateFile=`echo $OldestDate| tr ":" "-"`
+		echo $OldestDate
+		myNewFileName="$OldestDate-$hasGeo-"$exifSize"MPi.$extension" 
+		echo $myNewFileName
+break
+		myIndex=1
+		while [ -f "$myNewFilenamei" ]
+		do
+			myNewFileName="$OldestDateFile -$hasGeo-"$exifSize"MPi.$myIndex.$extension" 
+			myIndex=$(($myIndex + 1))
+		done
+		echo -n myNewFileName
+		thisDestDIR=$DEST/`echo myNewFilename  | cut -f1 -d" " | tr "-" "/"`
+		mkdir -p $thisDestDIR
+        	cp  $myNewFileName $thisDestDIR
+	else
+		echo dont-do-it
+	fi
 done <$ScriptName.FileList.lst

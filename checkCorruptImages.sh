@@ -2,7 +2,7 @@
 # this script is to automatically convert a folder of video files to H.265
 # You need to change SRC -- Source folder and DEST -- Destination folder
 
-SRC=/volume3/photo
+SRC=../
 DEST=/volume3/photo.kaputt
 
 ScriptDirName="$( cd "$(dirname "$0")" ; pwd -P )"
@@ -14,7 +14,7 @@ mkdir -p "$DEST"
 
 cd "$SRC"
 
-find . -path "*/@eaDir/*" -prune -o -print -exec file {} \; | grep -o -P '^.+: \w+ image' | cut -d: -f1  > $ScriptName.FileList.lst
+find . -path "*/@eaDir/*" -prune -o -print -exec file {} \; | grep -o -P '^.+: \w+ image' | pv -l | cut -d: -f1  > $ScriptName.FileList.lst
 
 cat $ScriptName.FileList.lst | wc -l
 endA=`wc -l $ScriptName.FileList.lst | cut -d " " -f 1`
