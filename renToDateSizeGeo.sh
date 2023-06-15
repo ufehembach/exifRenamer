@@ -54,6 +54,8 @@ echo $ScriptExtension
 
 mkdir -p "$DEST"
 myFileList=$ScriptName.FileList.lst
+myFileCSV=$ScriptName.FileList.csv
+
 
 cd "$SRC"
 #if test `find $myFileList -mmin +5000`
@@ -81,7 +83,7 @@ fi
 
 cat $ScriptName.FileList.lst | wc -l
 endA=$(wc -l $ScriptName.FileList.lst | cut -d " " -f 1)
-myA=1
+myA=0
 while read FILE; 
 do
 	filename=$(basename "$FILE")
@@ -112,7 +114,7 @@ do
 	getDateTimeFromFilename "$filename" "$pattern" filenamedate filenametime
 	# Access the output parameters
 	if [[ $filenametime =~ "No match found." ]]; then
-		# yyyy-mm-dd--hh-mm-ss bla
+		# yyyy-mm-dd--hh-mm bla
 		# 2019-01-04--21-10 PRDI0011.jpeg
 		pattern="([0-9]{4}-[0-9]{2}-[0-9]{2})--([0-9]{2}-[0-9]{2})"
 		getDateTimeFromFilename "$filename" "$pattern" filenamedate filenametime
@@ -139,26 +141,26 @@ do
 	checkDateValid "$exifDatTimOrg"   #&& echo "Datum ok" || echo "Datum Bad"
 	checkDateValid "$exifModDat"   #&& echo "Datum ok" || echo "Datum Bad"
  
-#	echo "filenamedate/time: $filenamedate $filenametime"
-#	echo "exifCreatD         $exifCreateD"
-#	echo "exifDatTimOrg      $exifDatTimOrg" 
-#	echo "exifModDat         $exifModDat"
+	#echo "filenamedate/time: $filenamedate $filenametime"
+	#echo "exifCreatD         $exifCreateD"
+	#echo "exifDatTimOrg      $exifDatTimOrg" 
+	#echo "exifModDat         $exifModDat"
 
-OldestDate=`cat << EOF | sort | head -1 | xargs
+OldestDate=`cat << EOF | sed '/^\s*$/d' |  sort | head -1 | xargs
 $exifCreateD
 $exifDatTimOrg 
 $exifModDat
 $filenamedate-$filenametime
 EOF`
 	
-Oldest2ndDate=`cat << EOF | sort | head -1 | xargs
+Oldest2ndDate=`cat << EOF | sed '/^\s*$/d' | sort | head -1 | xargs
 $exifCreateD
 $exifDatTimOrg 
 $exifModDat
 $filenamedate-$filenametime
 EOF`
 
-#	echo  ${#OldestDate} ${#Oldest2ndDate} 
+	#echo  ${#OldestDate} ${#Oldest2ndDate} 
 	if [ ${#OldestDate} -le ${#Oldest2ndDate} ]; then
 	    # echo "Die Variablen haben die gleiche Länge."
    	true
@@ -194,10 +196,19 @@ EOF`
 	then
 		#echo curl "https://nominatim.openstreetmap.org/reverse?format=json&lat=$GPSLat&lon=$GPSLon"
 		json=$(curl -s "https://nominatim.openstreetmap.org/reverse?format=json&lat=$GPSLat&lon=$GPSLon")
+#echo $json
 	#	"county":"Landkreis Sigmaringen"
 	#	"state":"Baden-Württemberg",
 	#	"ISO3166-2-lvl4":"DE-BW",
 	#	"country_code":"de"
+		licence=$(echo "$json" | jq -r '.license')
+		#echo "$license"
+		display_name=$(echo "$json" | jq -r '.display_name')
+		#echo "$display_name"
+		village=$(echo "$json" | jq -r '.address.village')
+		#echo "$village"
+		muncipality=$(echo "$json" | jq -r '.address.muncipality')
+		#echo "$muncipality"
 		county=$(echo "$json" | jq -r '.address.county')
 		#echo "$county"
 		country_code=$(echo "$json" | jq -r '.address.country_code')
@@ -214,7 +225,7 @@ EOF`
 		fi
 	fi
 
-	#echo "::"$OldestDate"::"
+	echo "::"$OldestDate"::"
 	if [ -n "$OldestDate"  ]
 		then
 	#	echo do-it
@@ -249,4 +260,9 @@ EOF`
 	else
 		echo dont-do-it
 	fi
+	if [ myA = 1 ]
+	then
+		echo count,Name,MPi,GEO,county,country_code,suburb,village,muncipality,iso3166,display_name,DIR,FILE,OldFileDat,Old-exifCreateDat,Old-exitDatTimOrg,old-exifModDat,OldestDateFile,Oldest2ndDate > $myFileCSV
+	fi
+	echo "$myA/$endA","$filename","$exifSize"MPi,"$hasGeo","$county","$country_code","$subburb","$village","$muncipality","$iso3166","$display_anme","$dirname","$FILE","$filenamedate $filenametime","$exifCreateD","$exifDatTimOrgD","$exifModDat","$OldesDateFile","$Oldest2ndDate" >> $myFileCSV
 done <$ScriptName.FileList.lst
