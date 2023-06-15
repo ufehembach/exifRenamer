@@ -84,17 +84,27 @@ endA=$(wc -l $ScriptName.FileList.lst | cut -d " " -f 1)
 myA=1
 while read FILE; 
 do
-	myA=$(( $myA + 1 ))
 	filename=$(basename "$FILE")
 	extension=${filename##*.}
 	filename=${filename%.*}
 	dirname=$(dirname "$FILE")
 	IN="$SRC/$FILE"
 	filename=$FILE
-	echo --------------------------
-	echo $endA/$myA DIR:$dirname $filename 
 	dirname=$(dirname "$filename")
 	filename=$(basename "$filename")
+
+	myA=$(( $myA + 1 ))
+	dd if=/dev/urandom count=$myA bs=1 2> /dev/null | pv -f -p -w 40 -s $endA > /dev/null
+	echo -n -------$filename-------------------
+	#echo $endA/$myA DIR:$dirname $filename 
+	if [ -s "$FILE" ]; then
+  	# 	echo "Die Datei ist nicht leer."
+		true
+	else
+  		echo "Die Datei ist leer."
+		continue
+	fi
+
 
 	# Extrahiere das Datum und die Zeit aus dem Dateinamen
 	# yyyy-mm-dd--hh-mm-ss bla
@@ -124,34 +134,34 @@ do
 	exifDatTimOrg=`exiftool -DateTimeOriginal "$FILE" | cut -f2- -d: | sed 's/^ *//' | sed 's/\([0-9]\{4\}\):\([0-9]\{2\}\):\([0-9]\{2\}\)/\1-\2-\3/' `
 	exifModDat=`exiftool -ModifyDate "$FILE" | cut -f2- -d: | sed 's/^ *//' | sed  's/\([0-9]\{4\}\):\([0-9]\{2\}\):\([0-9]\{2\}\)/\1-\2-\3/' `
 
-	checkDateValid "$filenamedate $filenametime" && echo "Datum ok" || echo "Datum Bad"
-	checkDateValid "$exifCreateD"   && echo "Datum ok" || echo "Datum Bad"
-	checkDateValid "$exifDatTimOrg"   && echo "Datum ok" || echo "Datum Bad"
-	checkDateValid "$exifModDat"   && echo "Datum ok" || echo "Datum Bad"
+	checkDateValid "$filenamedate $filenametime" #&& echo "Datum ok" || echo "Datum Bad"
+	checkDateValid "$exifCreateD"   #&& echo "Datum ok" || echo "Datum Bad"
+	checkDateValid "$exifDatTimOrg"   #&& echo "Datum ok" || echo "Datum Bad"
+	checkDateValid "$exifModDat"   #&& echo "Datum ok" || echo "Datum Bad"
  
 #	echo "filenamedate/time: $filenamedate $filenametime"
 #	echo "exifCreatD         $exifCreateD"
 #	echo "exifDatTimOrg      $exifDatTimOrg" 
 #	echo "exifModDat         $exifModDat"
 
-OldestDate=`cat << EOF | sort | head -1 
+OldestDate=`cat << EOF | sort | head -1 | xargs
 $exifCreateD
 $exifDatTimOrg 
 $exifModDat
-$filenamedate $filenametime
+$filenamedate-$filenametime
 EOF`
 	
-Oldest2ndDate=`cat << EOF | sort | head -1 
+Oldest2ndDate=`cat << EOF | sort | head -1 | xargs
 $exifCreateD
 $exifDatTimOrg 
 $exifModDat
-$filenamedate $filenametime
+$filenamedate-$filenametime
 EOF`
 
 #	echo  ${#OldestDate} ${#Oldest2ndDate} 
 	if [ ${#OldestDate} -le ${#Oldest2ndDate} ]; then
 	    # echo "Die Variablen haben die gleiche Länge."
-            echo .
+   	true
 	else
 	    #echo "Die Variablen haben unterschiedliche Längen."
 	    OldestDate=$Oldest2ndDate
@@ -161,7 +171,7 @@ EOF`
 	width=$(echo "$dimensions" | awk -F ': ' '/ImageWidth/{print $2}')
 	height=$(echo "$dimensions" | awk -F ': ' '/ImageHeight/{print $2}')
 	exifSize=$(awk "BEGIN{ printf \"%.1f\", ($width * $height) / 1000000 }")
-	echo "exifSize           $exifSize MPi"
+	#echo "exifSize           $exifSize MPi"
 
 	gps_data=$(exiftool -GPSLatitude -GPSLongitude -GPSAltitude -n -d "%+6f" "$FILE")
 	if [ -n "$gps_data" ]; then
@@ -171,47 +181,71 @@ EOF`
 		GPSLat=`exiftool -GPSLatitude -n -d "%+6f" "$FILE" | grep "GPS Latitude" | cut -d: -f2- | sed 's/^ *//'`
 		GPSLon=`exiftool -GPSLongitude -n -d "%+6f" "$FILE" | grep "GPS Longitude" | cut -d: -f2- | sed 's/^ *//'`
 		GPSAlt=`exiftool -GPSAltitude -n -d "%+6f" "$FILE"  | grep "GPS Altitude" | cut -d: -f2- | sed 's/^ *//'`
-		echo $GPSLat
-		echo $GPSLon
-		echo $GPSAlt
+		#echo $GPSLat
+		#echo $GPSLon
+		#echo $GPSAlt
 	else
   		#echo "Das Bild enthält keine GPS-Daten."
 		hasGeo="NoGeo"
   		# Weitere Aktionen für Bilder ohne GPS-Daten hier
 	fi
-	exiftool -XMP:all "$FILE"
-	if [  $hasGeo =  "GEO" ]
+	#exiftool -XMP:all "$FILE"
+	if [ $hasGeo = "GEO" ]
 	then
 		#echo curl "https://nominatim.openstreetmap.org/reverse?format=json&lat=$GPSLat&lon=$GPSLon"
-		curl "https://nominatim.openstreetmap.org/reverse?format=json&lat=$GPSLat&lon=$GPSLon"
+		json=$(curl -s "https://nominatim.openstreetmap.org/reverse?format=json&lat=$GPSLat&lon=$GPSLon")
+	#	"county":"Landkreis Sigmaringen"
+	#	"state":"Baden-Württemberg",
+	#	"ISO3166-2-lvl4":"DE-BW",
+	#	"country_code":"de"
+		county=$(echo "$json" | jq -r '.address.county')
+		#echo "$county"
+		country_code=$(echo "$json" | jq -r '.address.country_code')
+		#echo "$country_code"
+		suburb=$(echo "$json" | jq -r '.address.suburb')
+		#echo "$country_code"
+		iso3166=$(echo "$json" | jq -r '.address."ISO3166-2-lvl4"')
+		#echo "$iso3166"
+		myGeo=`echo "$iso3166"+"$county"+"$suburb"`
+	        if [ -n "$myGeo" ] 
+	       	then
+			hasGeo="$myGeo"
+	#		echo "$hasGeo"
+		fi
 	fi
-	echo " "
 
-	if [ ! -n "$OldestDate"  ]
+	#echo "::"$OldestDate"::"
+	if [ -n "$OldestDate"  ]
 		then
-		echo do-it
-		echo "-ufe-Old-Name=$filename" > tags.txt
-		echo "-ufe-Old-Dir=$dirname" >>tags.txt
-		echo "-ufe-Old-FileDat=$filenamedate $filenametime" >>tags.txt
-		echo "-ufe-Old-exifCreatDat=$exifCreateD" >>tags.txt
-		echo "-ufe-Old-exifDatTimOrg=$exifDatTimOrgD" >>tags.txt
-		echo "-ufe-Old-exifModDat=$exifModDat" >>tags.txt
+	#	echo do-it
+		echo "ufe-Old-Name=$filename" > tags.txt
+		echo "ufe-Old-Dir=$dirname" >>tags.txt
+		echo "ufe-Old-FileDat=$filenamedate $filenametime" >>tags.txt
+		echo "ufe-Old-exifCreatDat=$exifCreateD" >>tags.txt
+		echo "ufe-Old-exifDatTimOrg=$exifDatTimOrgD" >>tags.txt
+		echo "ufe-Old-exifModDat=$exifModDat" >>tags.txt
 
-		OldestDateFile=`echo $OldestDate| tr ":" "-"`
-		echo $OldestDate
-		myNewFileName="$OldestDate-$hasGeo-"$exifSize"MPi.$extension" 
-		echo $myNewFileName
-break
+		OldestDateFile=`echo $OldestDate | tr ":" "-" | tr " " "-"`
+	#	echo $OldestDatFile
+		myNewFileName="$OldestDateFile-$hasGeo-"$exifSize"MPi.$extension" 
+		myNewFilename=`echo "$myNewFileName" | tr ":" "-" `
+	#	echo "$myNewFileName"
+	# create folder if not exists
+		thisDestDIR=$DEST/`echo "$myNewFilename"  | cut -c 1-10 | tr "-" "/"`
+		mkdir -p $thisDestDIR
+	# verify if file is already existing, if so add index.
 		myIndex=1
-		while [ -f "$myNewFilenamei" ]
+		while [ -f "$thisDestDIR"/"$myNewFilename" ]
 		do
-			myNewFileName="$OldestDateFile -$hasGeo-"$exifSize"MPi.$myIndex.$extension" 
+			myNewFileName="$OldestDateFile-$hasGeo-"$exifSize"MPi.$myIndex.$extension" 
+			myNewFilename=`echo "$myNewFileName" | tr ":" "-" `
+#			echo "$myNewFileName"
 			myIndex=$(($myIndex + 1))
 		done
-		echo -n myNewFileName
-		thisDestDIR=$DEST/`echo myNewFilename  | cut -f1 -d" " | tr "-" "/"`
-		mkdir -p $thisDestDIR
-        	cp  $myNewFileName $thisDestDIR
+        	echo "$thisDestDIR"/"$myNewFileName"
+        	cp  "$FILE" "$thisDestDIR"/"$myNewFileName"
+#		cat tags.txt
+ 		exiftool -tagsFromFile tags.txt "$thisDestDIR"/"$myNewFileName"
 	else
 		echo dont-do-it
 	fi
