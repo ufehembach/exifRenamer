@@ -1,5 +1,5 @@
 #!/bin/bash
-# this script is to automatically convert a folder of video files to H.265
+# this script is to automatically renames all images to a date-time-resolution-geo filename
 # You need to change SRC -- Source folder and DEST -- Destination folder
 
 # Define the function
